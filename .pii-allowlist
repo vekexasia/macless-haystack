@@ -1,0 +1,9 @@
+# One regex per line. Keep entries narrow.
+# Examples:
+# (?i)^support@example\.com$
+# (?i)^user\d+@test\.com$
+
+# Public Google Fonts CSS endpoint used in app/styles.css
+^https://fonts\.googleapis\.com/css2\?
+# Auto-generated Next.js types reference (next-env.d.ts)
+^https://nextjs\.org/docs/[a-z0-9-/]+$
