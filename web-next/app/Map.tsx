@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Accessory, AccessoryHistoryEntry } from '../lib/storage';
 import { Icon, pathColor } from './parts';
 
@@ -14,6 +14,7 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layersRef = useRef<any[]>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   // create map once
   useEffect(() => {
@@ -36,12 +37,14 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
       }).addTo(map);
 
       mapRef.current = map;
+      setMapReady(true);
       // ensure leaflet recalculates after mount (parent may animate in)
       setTimeout(() => map.invalidateSize(), 0);
     });
 
     return () => {
       cancelled = true;
+      setMapReady(false);
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -49,14 +52,11 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
     };
   }, []);
 
-  // redraw path + markers when accessory changes
+  // redraw path + markers when accessory changes (or when the map becomes ready)
   useEffect(() => {
+    if (!mapReady) return;
     let cancelled = false;
     const draw = async () => {
-      if (!mapRef.current) {
-        // wait one tick if leaflet still initializing
-        await new Promise((r) => setTimeout(r, 50));
-      }
       const map = mapRef.current;
       if (!map || cancelled) return;
       const mod = await import('leaflet');
@@ -123,7 +123,7 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
     };
     draw();
     return () => { cancelled = true; };
-  }, [accessory?.id, accessory?.history?.map((h) => h.timestamp).join('|')]);
+  }, [mapReady, accessory?.id, accessory?.history?.map((h) => h.timestamp).join('|')]);
 
   // pan to selected point
   useEffect(() => {
