@@ -1,5 +1,23 @@
 # Macless-Haystack
 
+> ## Fork notice
+>
+> This is [**vekexasia**](https://github.com/vekexasia)'s fork of [`dchristl/macless-haystack`](https://github.com/dchristl/macless-haystack).
+>
+> **Live web app:** https://vekexasia.github.io/macless-haystack/ — auto-deployed from `main` via GitHub Pages.
+>
+> ### What this fork adds on top of upstream
+>
+> - **`web-next/`** — a Next.js 15 + React 19 web client replacing the previous static AirTags dashboard. Highlights:
+>   - Find My-style design: 3-panel desktop layout (sidebar / map / details), responsive mobile shell with bottom Map / Accessories / Settings tabs.
+>   - OpenTopoMap terrain tiles, Catmull-Rom-smoothed location path with a red-oldest → green-newest gradient.
+>   - Per-point Leaflet popovers showing timestamp, coordinates, and accuracy. The newest point has a distinct dark-ringed pulsing marker; the oldest is a dashed-ring marker.
+>   - URL deep-linking via `?acc=<slug>` (PWA-friendly, syncs with browser back/forward) and a Web Share API button with clipboard fallback for self-sharing.
+>   - Editorial typography (Source Serif 4 italic accents, Montserrat body, Roboto Mono for coordinates).
+> - **`.github/workflows/pages.yml`** — builds `web-next/` as a static export with the basePath set to the repo name and deploys to GitHub Pages on every push to `main`.
+>
+> The upstream Flutter app, Python endpoint, and Docker setup are unchanged. Upstream's `build.yaml` (Flutter app builds + GitHub releases) is disabled on this fork to keep CI clean.
+
 ![last commit](https://img.shields.io/github/last-commit/dchristl/macless-haystack)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Info-blue)](https://hub.docker.com/r/christld/macless-haystack)
 [![Docker Pulls](https://img.shields.io/docker/pulls/christld/macless-haystack)](https://hub.docker.com/r/christld/macless-haystack)
