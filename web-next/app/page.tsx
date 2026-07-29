@@ -50,26 +50,27 @@ export default function Home() {
   const [error, setError] = useState<UiError>(null);
   const [importError, setImportError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [mobileTab, setMobileTab] = useState<'map' | 'list' | 'settings'>('map');
 
-  // initial load: hydrate from storage, then resolve selection from ?acc=… (or first)
+  // initial load: hydrate from storage and select only an explicit ?acc=… target
   useEffect(() => {
     const stored = loadAccessories();
     setAccessories(stored);
     setSettings(loadSettings());
-    if (!stored.length) return;
     const fromUrl = new URL(window.location.href).searchParams.get('acc');
     const match = fromUrl ? stored.find((a) => slugify(a.name) === fromUrl) : null;
-    setSelectedId(match ? match.id : stored[0].id);
+    setSelectedId(match?.id ?? null);
+    setIsHydrated(true);
   }, []);
 
   // browser back/forward should re-sync the selection
   useEffect(() => {
     const handler = () => {
       const next = new URL(window.location.href).searchParams.get('acc');
-      if (!next) return;
-      const match = accessories.find((a) => slugify(a.name) === next);
-      if (match) setSelectedId(match.id);
+      const match = next ? accessories.find((a) => slugify(a.name) === next) : null;
+      setSelectedId(match?.id ?? null);
+      setShowSettings(false);
     };
     window.addEventListener('popstate', handler);
     return () => window.removeEventListener('popstate', handler);
@@ -77,18 +78,23 @@ export default function Home() {
 
   // keep ?acc=… in sync with the selected accessory (slug from name)
   useEffect(() => {
-    if (!selectedId) return;
+    if (!isHydrated) return;
     const acc = accessories.find((a) => a.id === selectedId);
-    if (!acc) return;
-    const slug = slugify(acc.name);
     const url = new URL(window.location.href);
+    if (!acc) {
+      if (!url.searchParams.has('acc')) return;
+      url.searchParams.delete('acc');
+      window.history.replaceState(null, '', url.toString());
+      return;
+    }
+    const slug = slugify(acc.name);
     if (url.searchParams.get('acc') === slug) return;
     url.searchParams.set('acc', slug);
     window.history.replaceState(null, '', url.toString());
-  }, [selectedId, accessories]);
+  }, [selectedId, accessories, isHydrated]);
 
   const selected = useMemo(
-    () => accessories.find((a) => a.id === selectedId) ?? accessories[0],
+    () => accessories.find((a) => a.id === selectedId) ?? null,
     [accessories, selectedId],
   );
 
@@ -100,8 +106,8 @@ export default function Home() {
   function persist(next: Accessory[]) {
     setAccessories(next);
     saveAccessories(next);
-    if (next.length && !next.some((a) => a.id === selectedId)) {
-      setSelectedId(next[0].id);
+    if (selectedId && !next.some((a) => a.id === selectedId)) {
+      setSelectedId(null);
     }
   }
 
@@ -122,7 +128,8 @@ export default function Home() {
       const text = await file.text();
       const imported = importAccessoriesJson(text);
       persist(imported);
-      setSelectedId(imported[0]?.id ?? null);
+      setSelectedId(null);
+      setShowSettings(false);
       setError(null);
     } catch {
       setImportError(true);
@@ -265,7 +272,12 @@ export default function Home() {
                 key={acc.id}
                 accessory={acc}
                 selected={acc.id === selectedId}
-                onSelect={() => { setSelectedId(acc.id); setSelectedTs(null); setMobileTab('map'); }}
+                onSelect={() => {
+                  setSelectedId((current) => current === acc.id ? null : acc.id);
+                  setShowSettings(false);
+                  setSelectedTs(null);
+                  setMobileTab('map');
+                }}
                 refreshing={acc.id === refreshingId}
               />
             ))}
@@ -280,9 +292,21 @@ export default function Home() {
       <div className="fm-panel-head">
         <div className="top">
           <h1>{showSettings ? 'Settings' : 'Details'}</h1>
-          <button className="fm-iconbtn" onClick={() => setShowSettings((s) => !s)} type="button">
-            <Icon name={showSettings ? 'x' : 'settings'} size={16}/>
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {selected && (
+              <button className="fm-iconbtn" title={showSettings ? 'Show details' : 'Show settings'} onClick={() => setShowSettings((s) => !s)} type="button">
+                <Icon name="settings" size={16}/>
+              </button>
+            )}
+            <button
+              className="fm-iconbtn"
+              title="Close panel"
+              onClick={() => { setShowSettings(false); setSelectedId(null); setSelectedTs(null); }}
+              type="button"
+            >
+              <Icon name="x" size={16}/>
+            </button>
+          </div>
         </div>
       </div>
       <div className="fm-panel-body">
@@ -346,7 +370,10 @@ export default function Home() {
   return (
     <div className="fm-app">
       {/* Desktop layout */}
-      <div className="fm-desktop fm-desktop-only" style={isEmpty ? { gridTemplateColumns: '320px 1fr' } : undefined}>
+      <div
+        className="fm-desktop fm-desktop-only"
+        style={{ gridTemplateColumns: selected || showSettings ? '320px 1fr 360px' : '320px 1fr' }}
+      >
         {Sidebar}
 
         <div className="fm-center">
@@ -366,15 +393,27 @@ export default function Home() {
                 />
               </div>
             )}
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={refreshAll}
-              disabled={isRefreshing || isEmpty}
-              type="button"
-            >
-              <Icon name="refresh" size={14}/>
-              {isRefreshing ? 'Refreshing…' : 'Refresh all'}
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!selected && !showSettings && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowSettings(true)}
+                  type="button"
+                >
+                  <Icon name="settings" size={14}/>
+                  Settings
+                </button>
+              )}
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={refreshAll}
+                disabled={isRefreshing || isEmpty}
+                type="button"
+              >
+                <Icon name="refresh" size={14}/>
+                {isRefreshing ? 'Refreshing…' : 'Refresh all'}
+              </button>
+            </div>
           </div>
           <div className="map-wrap">
             {isEmpty ? (
@@ -398,7 +437,7 @@ export default function Home() {
           </div>
         </div>
 
-        {!isEmpty && RightPanel}
+        {(selected || showSettings) && RightPanel}
       </div>
 
       {/* Mobile layout */}
@@ -454,7 +493,12 @@ export default function Home() {
                     key={acc.id}
                     accessory={acc}
                     selected={acc.id === selectedId}
-                    onSelect={() => { setSelectedId(acc.id); setSelectedTs(null); setMobileTab('map'); }}
+                    onSelect={() => {
+                      setSelectedId((current) => current === acc.id ? null : acc.id);
+                      setShowSettings(false);
+                      setSelectedTs(null);
+                      setMobileTab('map');
+                    }}
                     refreshing={acc.id === refreshingId}
                   />
                 ))}
