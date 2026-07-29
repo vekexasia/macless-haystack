@@ -121,11 +121,17 @@ function colorFromComponents(components?: number[]) {
 }
 
 function colorToComponents(color: string) {
-  const clean = color.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16) || 100;
-  const g = parseInt(clean.slice(2, 4), 16) || 116;
-  const b = parseInt(clean.slice(4, 6), 16) || 139;
-  return [r / 255, g / 255, b / 255, 1];
+  let clean = color.replace('#', '');
+  if (clean.length === 3) clean = clean.split('').map((value) => value + value).join('');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return [
+    Number.isFinite(r) ? r / 255 : 100 / 255,
+    Number.isFinite(g) ? g / 255 : 116 / 255,
+    Number.isFinite(b) ? b / 255 : 139 / 255,
+    1,
+  ];
 }
 
 function hex(value: number) {

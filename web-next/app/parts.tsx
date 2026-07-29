@@ -65,6 +65,29 @@ const ICON_ALIAS: Record<string, string> = {
   'eye.fill': 'eye',
 };
 
+export const ACCESSORY_ICON_OPTIONS = [
+  { name: 'creditcard.fill', label: 'Card' },
+  { name: 'briefcase.fill', label: 'Briefcase' },
+  { name: 'case.fill', label: 'Case' },
+  { name: 'latch.2.case.fill', label: 'Luggage' },
+  { name: 'key.fill', label: 'Key' },
+  { name: 'mappin', label: 'Pin' },
+  { name: 'globe', label: 'Globe' },
+  { name: 'crown.fill', label: 'Crown' },
+  { name: 'gift.fill', label: 'Gift' },
+  { name: 'car.fill', label: 'Car' },
+  { name: 'bicycle', label: 'Bicycle' },
+  { name: 'figure.walk', label: 'Walking' },
+  { name: 'heart.fill', label: 'Heart' },
+  { name: 'hare.fill', label: 'Rabbit' },
+  { name: 'tortoise.fill', label: 'Tortoise' },
+  { name: 'eye.fill', label: 'Eye' },
+] as const;
+
+export function normalizeAccessoryIcon(raw?: string) {
+  return ACCESSORY_ICON_OPTIONS.some((option) => option.name === raw) ? raw! : 'mappin';
+}
+
 export function resolveIconName(raw?: string) {
   if (!raw) return 'pin';
   if (ICON_ALIAS[raw]) return ICON_ALIAS[raw];
@@ -285,14 +308,78 @@ function ShareButton({ accessoryName }: { accessoryName: string }) {
   );
 }
 
+export function AccessoryEditor({
+  accessory, onChange,
+}: {
+  accessory: Accessory;
+  onChange?: (patch: Partial<Accessory>) => void;
+}) {
+  const icon = normalizeAccessoryIcon(accessory.icon);
+  const update = (patch: Partial<Accessory>) => onChange?.(patch);
+  return (
+    <details className="fm-accessory-editor" open>
+      <summary>Edit accessory</summary>
+      <div className="fm-editor-fields">
+        <label className="field">
+          <span>Name</span>
+          <input
+            className="input"
+            value={accessory.name}
+            aria-label="Accessory name"
+            onChange={(event) => update({ name: event.target.value })}
+          />
+        </label>
+        <label className="fm-editor-toggle">
+          <input
+            type="checkbox"
+            checked={accessory.isActive}
+            aria-label="Active accessory"
+            onChange={(event) => update({ isActive: event.target.checked })}
+          />
+          <span>Active</span>
+        </label>
+        <div className="field">
+          <span>Icon</span>
+          <div className="fm-icon-options" role="group" aria-label="Accessory icon">
+            {ACCESSORY_ICON_OPTIONS.map((option) => (
+              <button
+                key={option.name}
+                className={`fm-icon-option ${icon === option.name ? 'selected' : ''}`}
+                type="button"
+                title={option.label}
+                aria-label={`${option.label} icon`}
+                aria-pressed={icon === option.name}
+                onClick={() => onChange?.({ icon: option.name })}
+              >
+                <Icon name={resolveIconName(option.name)} size={18}/>
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="field fm-color-field">
+          <span>Color</span>
+          <input
+            type="color"
+            value={/^#[0-9a-f]{6}$/i.test(accessory.color) ? accessory.color : '#64748b'}
+            aria-label="Accessory color"
+            onChange={(event) => update({ color: event.target.value })}
+          />
+        </label>
+      </div>
+    </details>
+  );
+}
+
 /* ====================== Big screen pieces ====================== */
 
 export function SelectedSummary({
-  accessory, refreshing, onRefresh, onOpenMap,
+  accessory, refreshing, busy, onRefresh, onAccessoryChange, onOpenMap,
 }: {
   accessory: Accessory;
   refreshing?: boolean;
+  busy?: boolean;
   onRefresh?: () => void;
+  onAccessoryChange?: (patch: Partial<Accessory>) => void;
   onOpenMap?: () => void;
 }) {
   const latest = accessory.history?.[0];
@@ -316,6 +403,7 @@ export function SelectedSummary({
           )}
         </div>
       </div>
+      <AccessoryEditor accessory={accessory} onChange={onAccessoryChange}/>
 
       {latest ? (
         <>
@@ -337,7 +425,11 @@ export function SelectedSummary({
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            <button className="btn btn-gradient btn-sm" onClick={onRefresh} disabled={refreshing}>
+            <button
+              className="btn btn-gradient btn-sm"
+              onClick={onRefresh}
+              disabled={busy || refreshing}
+            >
               <Icon name="refresh" size={14} style={{ animation: refreshing ? 'fmSpin 1s linear infinite' : 'none' }}/>
               {refreshing ? 'Refreshing…' : 'Refresh now'}
             </button>

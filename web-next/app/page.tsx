@@ -27,7 +27,7 @@ import {
 
 const MapView = dynamic(() => import('./Map'), { ssr: false });
 
-type UiError = { title: string; body: string } | null;
+type UiError = { title: string; body: string; accessoryId?: string } | null;
 
 function slugify(s: string) {
   return s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
@@ -105,6 +105,17 @@ export default function Home() {
     }
   }
 
+  function updateAccessory(id: string, patch: Partial<Accessory>) {
+    setAccessories((previous) => {
+      const next = previous.map((accessory) => (
+        accessory.id === id ? { ...accessory, ...patch } : accessory
+      ));
+      if (!next.some((accessory) => accessory.id === id)) return previous;
+      saveAccessories(next);
+      return next;
+    });
+  }
+
   async function onImport(file: File) {
     try {
       setImportError(false);
@@ -118,20 +129,17 @@ export default function Home() {
     }
   }
 
-  async function refreshLocations() {
-    if (!accessories.length || isLoading) return;
+  async function refreshTargets(targetIds: string[], singleAccessoryId?: string) {
+    if (isLoading) return;
+    const targetSet = new Set(targetIds);
+    const targets = accessories.filter((accessory) => targetSet.has(accessory.id));
+    if (!targets.length) return;
     setIsLoading(true);
     setError(null);
-    const active = accessories.filter((a) => a.isActive);
-    setProgress({ current: 0, total: active.length });
-    let activeIndex = 0;
+    setProgress({ current: 0, total: targets.length });
+    let completed = 0;
     try {
-      const updated: Accessory[] = [];
-      for (const accessory of accessories) {
-        if (!accessory.isActive) {
-          updated.push(accessory);
-          continue;
-        }
+      for (const accessory of targets) {
         setRefreshingId(accessory.id);
         const reports = await fetchAndDecryptReports({
           endpoint: settings.endpoint,
@@ -140,39 +148,58 @@ export default function Home() {
           days: settings.days,
           privateKeys: [accessory.privateKey, ...accessory.additionalKeys],
         });
-        activeIndex += 1;
-        setProgress({ current: activeIndex, total: active.length });
+        completed += 1;
+        setProgress({ current: completed, total: targets.length });
         const latest = reports[0];
-        if (!latest) {
-          updated.push({ ...accessory, history: [] });
-          continue;
-        }
-        updated.push({
-          ...accessory,
-          lat: latest.latitude,
-          lon: latest.longitude,
-          lastSeen: latest.timestamp,
-          history: reports.map((report) => ({
-            lat: report.latitude,
-            lon: report.longitude,
-            accuracy: report.accuracy,
-            timestamp: report.timestamp,
-            batteryStatus: report.batteryStatus,
-          })),
+        setAccessories((previous) => {
+          const next = previous.map((current) => {
+            if (current.id !== accessory.id) return current;
+            if (!latest) return { ...current, history: [] };
+            return {
+              ...current,
+              lat: latest.latitude,
+              lon: latest.longitude,
+              lastSeen: latest.timestamp,
+              history: reports.map((report) => ({
+                lat: report.latitude,
+                lon: report.longitude,
+                accuracy: report.accuracy,
+                timestamp: report.timestamp,
+                batteryStatus: report.batteryStatus,
+              })),
+            };
+          });
+          saveAccessories(next);
+          return next;
         });
       }
-      setAccessories(updated);
-      saveAccessories(updated);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError({
         title: "Couldn't reach the endpoint",
         body: msg || 'Verify your endpoint URL, username and password in settings, then try again.',
+        accessoryId: singleAccessoryId,
       });
     } finally {
       setRefreshingId(null);
       setIsLoading(false);
     }
+  }
+
+  function refreshAll() {
+    const activeIds = accessories.filter((accessory) => accessory.isActive).map((accessory) => accessory.id);
+    if (!activeIds.length) {
+      setError({
+        title: 'No active accessories',
+        body: 'Activate at least one accessory before refreshing all.',
+      });
+      return;
+    }
+    return refreshTargets(activeIds);
+  }
+
+  function refreshOne(accessoryId: string) {
+    return refreshTargets([accessoryId], accessoryId);
   }
 
   function downloadExport() {
@@ -209,7 +236,7 @@ export default function Home() {
             </label>
             <button
               className={`fm-iconbtn ${isRefreshing ? 'spinning' : ''}`}
-              onClick={refreshLocations}
+              onClick={refreshAll}
               disabled={isRefreshing || isEmpty}
               title="Refresh"
               type="button"
@@ -263,25 +290,28 @@ export default function Home() {
           <SettingsCard
             settings={settings}
             onChange={updateSettings}
-            onTest={refreshLocations}
+            onTest={refreshAll}
             onImport={onImport}
             onExport={downloadExport}
             canExport={!isEmpty}
             isLoading={isLoading}
           />
-        ) : error ? (
-          <ErrorBanner
-            title={error.title}
-            body={error.body}
-            onRetry={refreshLocations}
-            onDismiss={() => setError(null)}
-          />
         ) : selected ? (
           <>
+            {error && (
+              <ErrorBanner
+                title={error.title}
+                body={error.body}
+                onRetry={() => error.accessoryId ? refreshOne(error.accessoryId) : refreshAll()}
+                onDismiss={() => setError(null)}
+              />
+            )}
             <SelectedSummary
               accessory={selected}
               refreshing={isRefreshing && selected.id === refreshingId}
-              onRefresh={refreshLocations}
+              busy={isLoading}
+              onRefresh={() => refreshOne(selected.id)}
+              onAccessoryChange={(patch) => updateAccessory(selected.id, patch)}
               onOpenMap={
                 selected.history?.[0]
                   ? () => {
@@ -304,7 +334,7 @@ export default function Home() {
               <ErrorBanner
                 title="No reports for this accessory"
                 body="The endpoint returned no reports in the selected window. The accessory may be out of range, or try increasing the days to fetch."
-                onRetry={refreshLocations}
+                onRetry={() => refreshOne(selected.id)}
               />
             )}
           </>
@@ -338,7 +368,7 @@ export default function Home() {
             )}
             <button
               className="btn btn-secondary btn-sm"
-              onClick={refreshLocations}
+              onClick={refreshAll}
               disabled={isRefreshing || isEmpty}
               type="button"
             >
@@ -390,7 +420,7 @@ export default function Home() {
             </label>
             <button
               className={`fm-iconbtn ${isRefreshing ? 'spinning' : ''}`}
-              onClick={refreshLocations}
+              onClick={refreshAll}
               disabled={isRefreshing || isEmpty}
               style={{ width: 32, height: 32 }}
               type="button"
@@ -407,7 +437,7 @@ export default function Home() {
             <SettingsCard
               settings={settings}
               onChange={updateSettings}
-              onTest={refreshLocations}
+              onTest={refreshAll}
               onImport={onImport}
               onExport={downloadExport}
               canExport={!isEmpty}
@@ -443,7 +473,7 @@ export default function Home() {
                 <ErrorBanner
                   title={error.title}
                   body={error.body}
-                  onRetry={refreshLocations}
+                  onRetry={() => error.accessoryId ? refreshOne(error.accessoryId) : refreshAll()}
                   onDismiss={() => setError(null)}
                 />
               )}
@@ -451,7 +481,9 @@ export default function Home() {
                 <SelectedSummary
                   accessory={selected}
                   refreshing={isRefreshing && selected.id === refreshingId}
-                  onRefresh={refreshLocations}
+                  busy={isLoading}
+                  onRefresh={() => refreshOne(selected.id)}
+                  onAccessoryChange={(patch) => updateAccessory(selected.id, patch)}
                   onOpenMap={
                     selected.history?.[0]
                       ? () => {
@@ -480,7 +512,7 @@ export default function Home() {
                 <ErrorBanner
                   title="No reports for this accessory"
                   body="Try refreshing, or check the days-to-fetch in settings."
-                  onRetry={refreshLocations}
+                  onRetry={() => refreshOne(selected.id)}
                 />
               )}
               {selected && (selected.history?.length ?? 0) > 0 && (

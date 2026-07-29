@@ -307,6 +307,61 @@ button, input { font-family: inherit; }
   padding: 24px;
   display: flex; flex-direction: column; gap: 16px;
 }
+
+/* ===== Accessory editor ===== */
+.fm-accessory-editor {
+  background: var(--duik-surface-sunken);
+  border: 1px solid var(--duik-color-neutral-200);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.fm-accessory-editor > summary {
+  cursor: pointer;
+  color: var(--duik-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.fm-editor-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.fm-editor-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--duik-text-secondary);
+  font-size: 12px;
+}
+.fm-editor-toggle input { accent-color: var(--duik-color-brand-purple); }
+.fm-icon-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
+}
+.fm-icon-option {
+  width: 36px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--duik-text-secondary);
+  background: var(--duik-surface-card);
+  border: 1px solid var(--duik-color-neutral-200);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fm-icon-option:hover { color: var(--duik-text-primary); background: var(--duik-surface-sunken); }
+.fm-icon-option.selected {
+  color: var(--duik-color-brand-purple);
+  border-color: var(--duik-color-brand-purple);
+  background: var(--duik-color-brand-purple-soft);
+}
+.fm-color-field input[type="color"] {
+  width: 44px; height: 32px;
+  padding: 2px;
+  border: 1px solid var(--duik-color-neutral-300);
+  border-radius: 8px;
+  background: var(--duik-surface-card);
+  cursor: pointer;
+}
 .fm-summary .head { display: flex; gap: 14px; align-items: flex-start; }
 .fm-summary h2 {
   margin: 0;
