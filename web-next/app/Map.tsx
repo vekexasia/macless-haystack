@@ -6,11 +6,13 @@ import { Icon, pathColor } from './parts';
 
 type Props = {
   accessory?: Accessory;
+  accessories?: Accessory[];
   selectedTs?: string | null;
   onPointSelect?: (entry: AccessoryHistoryEntry) => void;
+  onAccessorySelect?: (id: string) => void;
 };
 
-export default function MapView({ accessory, selectedTs, onPointSelect }: Props) {
+export default function MapView({ accessory, accessories = [], selectedTs, onPointSelect, onAccessorySelect }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layersRef = useRef<any[]>([]);
@@ -65,7 +67,44 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
       layersRef.current.forEach((l) => map.removeLayer(l));
       layersRef.current = [];
 
-      const history = accessory?.history ?? [];
+      if (!accessory) {
+        const located = accessories.flatMap((item) => {
+          const latest = item.history?.find((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon));
+          return latest ? [{ item, latest }] : [];
+        });
+        if (!located.length) return;
+
+        located.forEach(({ item, latest }) => {
+          const marker = L.circleMarker([latest.lat, latest.lon], {
+            radius: 9,
+            color: '#fff',
+            weight: 3,
+            fillColor: item.color || '#6d28d9',
+            fillOpacity: 1,
+          }).addTo(map);
+          const when = new Date(latest.timestamp);
+          const whenLabel = Number.isFinite(when.getTime()) ? when.toLocaleString() : '—';
+          marker.bindPopup(
+            `<div class="fm-point-popover">
+              <div class="role">${escapeHtml(item.name)}</div>
+              <div class="ts">${escapeHtml(whenLabel)}</div>
+              <div class="coords">${latest.lat.toFixed(5)}, ${latest.lon.toFixed(5)}</div>
+              <div class="acc">±${Math.round(latest.accuracy)} m</div>
+            </div>`,
+          );
+          marker.on('click', () => onAccessorySelect?.(item.id));
+          layersRef.current.push(marker);
+        });
+
+        map.fitBounds(
+          L.latLngBounds(located.map(({ latest }) => [latest.lat, latest.lon])),
+          { padding: [40, 40], maxZoom: 17 },
+        );
+        setTimeout(() => map.invalidateSize(), 0);
+        return;
+      }
+
+      const history = accessory.history ?? [];
       const valid = history.filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon));
       if (!valid.length) return;
 
@@ -123,7 +162,12 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
     };
     draw();
     return () => { cancelled = true; };
-  }, [mapReady, accessory?.id, accessory?.history?.map((h) => h.timestamp).join('|')]);
+  }, [
+    mapReady,
+    accessory?.id,
+    accessory?.history?.map((h) => h.timestamp).join('|'),
+    accessories.map((item) => `${item.id}:${item.history?.[0]?.timestamp ?? ''}`).join('|'),
+  ]);
 
   // pan to selected point
   useEffect(() => {
@@ -139,14 +183,22 @@ export default function MapView({ accessory, selectedTs, onPointSelect }: Props)
   };
   const recenter = async () => {
     const m = mapRef.current;
-    if (!m || !accessory?.history?.length) return;
+    if (!m) return;
+    const points = accessory
+      ? (accessory.history ?? []).filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon))
+      : accessories.flatMap((item) => {
+          const latest = item.history?.find((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon));
+          return latest ? [latest] : [];
+        });
+    if (!points.length) return;
     const mod = await import('leaflet');
     const L = (mod as any).default ?? mod;
-    const pts = accessory.history.map((h) => [h.lat, h.lon]);
-    m.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+    m.fitBounds(L.latLngBounds(points.map((h) => [h.lat, h.lon])), { padding: [40, 40], maxZoom: 17 });
   };
 
-  const hasHistory = (accessory?.history?.length ?? 0) > 0;
+  const hasHistory = accessory
+    ? (accessory.history?.length ?? 0) > 0
+    : accessories.some((item) => (item.history?.length ?? 0) > 0);
 
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>

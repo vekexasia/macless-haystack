@@ -381,7 +381,7 @@ export default function Home() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
               <div className="eyebrow">Live tracking</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 18, fontWeight: 600 }}>
-                {selected ? selected.name : isEmpty ? 'Welcome back' : 'No accessory selected'}
+                {selected ? selected.name : isEmpty ? 'Welcome back' : 'All accessories'}
               </div>
             </div>
             {isRefreshing && (
@@ -422,17 +422,24 @@ export default function Home() {
                   <EmptyImport onImport={onImport} error={importError}/>
                 </div>
               </div>
-            ) : selected && (selected.history?.length ?? 0) > 0 ? (
-              <MapView
-                accessory={selected}
-                selectedTs={selectedTs}
-                onPointSelect={(p) => setSelectedTs(p.timestamp)}
-              />
+            ) : selected ? (
+              (selected.history?.length ?? 0) > 0 ? (
+                <MapView
+                  accessory={selected}
+                  selectedTs={selectedTs}
+                  onPointSelect={(p) => setSelectedTs(p.timestamp)}
+                />
+              ) : (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--duik-text-tertiary)' }}>
+                  <Icon name="pin" size={42}/>
+                  <div style={{ fontSize: 14 }}>No reports for this accessory yet</div>
+                </div>
+              )
             ) : (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--duik-text-tertiary)' }}>
-                <Icon name="pin" size={42}/>
-                <div style={{ fontSize: 14 }}>{selected ? 'No reports for this accessory yet' : 'Select an accessory'}</div>
-              </div>
+              <MapView
+                accessories={accessories}
+                onAccessorySelect={(id) => { setSelectedId(id); setSelectedTs(null); }}
+              />
             )}
           </div>
         </div>
@@ -541,13 +548,15 @@ export default function Home() {
                   }
                 />
               )}
-              {selected && (selected.history?.length ?? 0) > 0 && (
+              {(!selected || (selected.history?.length ?? 0) > 0) && (
                 <div className="fm-map-card" style={{ height: 320 }}>
                   <div className="map-host" style={{ minHeight: 0 }}>
                     <MapView
-                      accessory={selected}
+                      accessory={selected ?? undefined}
+                      accessories={selected ? undefined : accessories}
                       selectedTs={selectedTs}
                       onPointSelect={(p) => setSelectedTs(p.timestamp)}
+                      onAccessorySelect={(id) => { setSelectedId(id); setSelectedTs(null); }}
                     />
                   </div>
                 </div>
